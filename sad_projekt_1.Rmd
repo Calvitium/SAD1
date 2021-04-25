@@ -302,6 +302,7 @@ ggplot(minimal_interval_data) +
   )
 
 ```
+
 ### ii 
 
 Rozkład Poissona może być wyznaczony na podstawie średniej. W badanym przypadku wynosi 0.15.
@@ -333,6 +334,7 @@ draw_pois_histogram <- function(df) {
 
 draw_pois_histogram(minimal_interval_data) +
   stat_function(geom="line", n=3, fun=dpois, args=list(lambda=lambda), colour = "red", size=1.5)
+
 ```
 
 
