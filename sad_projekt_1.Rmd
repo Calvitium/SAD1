@@ -118,7 +118,8 @@ pekao.sd <- sd(pekao.df$delta)
 
 ## 1.d
 
-TODO
+Krzywe rozkładu normalnego jednoznacznie pokrywają się z wykresem słupkowym. Zdarzają się niewielkie różnice między wykresami, ale nie są na tyle znaczące, żeby sugerowały niepoprawne zamodelowanie. Prawdopodobnie przy zwiększeniu
+liczności zbioru danych (uzyskaniu lepszego estymatora) wykresy byłyby jeszcze bardziej zbliżone.
 
 ### Wykresy porównujące modelowy rozkład, a faktyczne dane.
 
@@ -214,6 +215,7 @@ ggplot(countinuous_phase_quarter_interval,
        aes(x = paste(date, interval), y = volume, group = 1)) +
   geom_line(colour = "blue") +
   theme_bw() +
+  scale_x_discrete(name = "Time", breaks = 1)
   labs(
     title = "Continuous phase volume by 15-min intervals",
     x = "Time",
@@ -310,7 +312,9 @@ lambda <- mean(minimal_interval_data$seconds_count)
 
 ### iii
 
-TODO
+Zamodelowany rozkład jest zgodny z porównywanym zbiorem danych. W przypadku badanej spółki - Orange Polska S.A. liczba sekund, w których dokonano transakcji była nieznaczna, dlatego na wykresie znajdują się jedynie trzy słupki. Mimo to,
+rokład Poissona przedstawia zdecydowanie większe prawdopodobieństwo braku transakcji niż jednej oraz dwóch transakcji, co
+odpowiada danym, ponieważ w przedziale 120 minut sumaryczna liczba transakcji wynosiła zaledwie 18. Dodatkowo średnia liczba transakcji wynosi 0.15, czyli szansa na jakąkolwiek transakcję jest stosunkowo niewielka.
 
 ### Wykres porównujący rozkład modelowy z danymi
 
@@ -321,9 +325,9 @@ draw_pois_histogram <- function(df) {
     #scale_x_continuous(breaks=c(0,1,2,3,4)) + 
     geom_histogram(aes(y = ..density.. ), colour="white", fill="blue", binwidth=1) +
     labs(
-      title = paste("[2019] Histogram procentowych zmian zamknięcia spółki", df[1,1]),
-      x = "Zmiany cen zamknięcia [%]",
-      y = "Częstość występowania"
+      title = paste("[2019] Frequency of total seconds when a purchase occured"),
+      x = "Number of seconds when a purchase occured",
+      y = "Frequency"
     )
 }
 
