@@ -11,7 +11,7 @@ output:
 
 W rozwiązaniu projektu korzystaliśmy z następujących bilbiotek
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 library(dplyr)
 library(tibble)
 library(ggplot2)
@@ -75,7 +75,7 @@ funkcji opakowujących narzędzia z pakietu ggplot.
 draw_histogram <- function(df) {
   ggplot(df, aes(delta)) +
     theme_bw() +
-    geom_histogram(aes(y = ..density..), colour = "white", fill = "blue") +
+    geom_histogram(aes(y = ..density..), colour = "white", fill = "blue", binwidth=1) +
     labs(
       title = paste("[2019] Histogram procentowych zmian zamknięcia spółki", df[1, 1]),
       x = "Zmiany cen zamknięcia [%]",
@@ -138,10 +138,12 @@ orange.df <- arrange(read.csv("./ORANGEPL.csv"), date)
 ```
 ## 2.a
 
-Wyznaczeniu ceny z każdej fazy notowań odpowiada oddzielna funkcja.
+Wyznaczeniu ceny z każdej fazy notowań odpowiada oddzielna funkcja. Open_phase wyznacza wolumen transakcji z czasem 9:00 oraz ceną taką jak pierwsza transakcja tego dnia. Continuous_phase wyznacza wolumen transakcji z przedziału 9:00 do 16:51, ale bez transakcji z otwarcia. Close_phase wyznacza wolumen w dogrywce, czyli po 16:59.
 
-``` {r}
+Następnie funkcja phase combined łaczy informacje uzyskane przez poprzednie funkcje,
+aby określić rozkład wolumenu między fazy dnia notowań.
 
+``` {r, message=FALSE}
 open_phase <- orange.df %>%
   filter(time == 090000) %>%
   group_by(date, time, price) %>%
@@ -166,7 +168,11 @@ phases_combined <- open_phase %>%
   add_column(continuous_volume = continuous_phase$volume) %>%
   add_column(close_volume = close_phase$volume) %>%
   select(-time, -price)
+```
 
+### Wykres przedstawiający rozkłąd wolumenu między fazami (otwarcie, notowania ciągłe, dogrywka)
+
+``` {r, message=FALSE}
 ggplot(phases_combined, aes(date)) +
   geom_line(aes(
     y = 100 * open_volume / (open_volume + continuous_volume + close_volume),
@@ -182,21 +188,28 @@ ggplot(phases_combined, aes(date)) +
     x = "Day",
     y = "Daily volume contribution"
   )
+```
 
+## 2.b
 
-# b) transaction volume distribution over continuous phase
+Podział notowań ciągłych na 15-minutowe interwały odbywa się poprzez zaokrąglenie godziny
+do najbliższych 15 minut. W tym celu, wykorzystaliśmy funkcję floor. Dodatkowo, z notowania
+z godziny 9:00 odjęty jest wolumen z otwarcia sesji (jeśli doszło wtedy do transakcji)
 
+``` {r, warning=FALSE, message=FALSE}
 countinuous_phase_quarter_interval <- orange.df %>%
   filter(between(time, 090000, 165100)) %>%
   # z liczby hhmmss pozostaw niezmieniona godzine (hh----), a --mmss podziel na przedzialy 15 minutowe
   group_by(date, interval = floor(time / 10000) * 10000 + floor(time %% 10000 / 1500) * 1500) %>%
   summarise(volume = sum(volume)) %>%
-  # TODO <- ta linijka generuje  warning, poniewaz teoretycznie open_phase$volume[open_phase$date==date] moze zwrocic kilka wartosci
   mutate(volume = ifelse(date %in% open_phase$date & interval == 090000, volume - open_phase$volume[open_phase$date==date],volume)) %>%
 mutate(date = as.Date.character(date, format = "%y%m%d")) %>%
   mutate(interval = formatC(as.integer(interval), big.mark = ":", big.interval = 2L))
+```
 
-# TODO <- wiesz jak rozwiazac problem braku etykiet na osi X ?
+### Wykres rozkładu wolumenu w czasie notowań ciągłych w październiku 2019 roku
+
+``` {r}
 ggplot(countinuous_phase_quarter_interval, 
        aes(x = paste(date, interval), y = volume, group = 1)) +
   geom_line(colour = "blue") +
@@ -206,8 +219,15 @@ ggplot(countinuous_phase_quarter_interval,
     x = "Time",
     y = "Volume"
   )
+```
 
-# C
+## 2.c
+
+### i
+
+Algorytm wyznaczenia przedziału posiadającego najmniej sekund z transakcjami przebiega następująco: dla każdego przedziału (10:00-12:00, 11:00-13:00, ..., 14:00-16:00), wyznacz minimalną liczbę sekund z transakcjami dla każdego dnia, wyznacz minimalny przedział z otrzymanych wyników
+
+``` {r, warning=FALSE, message=FALSE}
 compute_minimal_distinct_seconds_count <- function(hour_from, hour_to) {
   orange.df %>%
     filter(between(time, hour_from, hour_to)) %>%
@@ -227,7 +247,12 @@ minimal_interval_metadata <- bind_rows(
 ) %>%
   filter(distinct_seconds == min(distinct_seconds))
 
-print(minimal_interval_metadata)
+```
+
+Modelowany rozkład ma dotyczyć każdej minuty z otrzymanego przedziału. Poniższy fragment kodu
+dokonuje preprocessingu tych danych przed modelowaniem.
+
+``` {r, warning=FALSE, message=FALSE}
 
 minimal_interval_data <- orange.df %>%
   filter(
@@ -247,9 +272,11 @@ minimal_interval_data <- orange.df %>%
   ungroup() %>%
   mutate(time = 1:120)
 
-print(minimal_interval_data)
+```
 
-# i illustrate active seconds (transaction-wise)
+Dwie funckcje pomocnicze zamieniają format daty i czasu na bardziej czytelny
+
+```{r}
 
 format_time <- function(raw_time) {
   return(formatC(as.integer(raw_time), big.mark = ":", big.interval = 2L))
@@ -258,6 +285,11 @@ format_time <- function(raw_time) {
 format_date <- function(raw_date) {
   return(as.Date.character(raw_date, format = "%y%m%d"))
 }
+```
+
+### Wykres sumy transakcji w każdej minucie dwugodzinnego przedziału
+
+``` {r, warning=FALSE}
 
 ggplot(minimal_interval_data) +
   geom_point(aes(x = time, y = seconds_count)) +
@@ -267,13 +299,22 @@ ggplot(minimal_interval_data) +
     y = "Number of active seconds"
   )
 
-# ii parametry rozkladu
+```
+### ii 
 
-boundary <- as.integer(minimal_interval_metadata[2])
-print(boundary)
+Rozkład Poissona może być wyznaczony na podstawie średniej. W badanym przypadku wynosi 0.15.
+
+```{r}
 lambda <- mean(minimal_interval_data$seconds_count)
-print(minimal_interval_data)
+```
 
+### iii
+
+TODO
+
+### Wykres porównujący rozkład modelowy z danymi
+
+``` {r}
 draw_pois_histogram <- function(df) {
   ggplot(df, aes(seconds_count)) +
     theme_bw() +
@@ -289,4 +330,6 @@ draw_pois_histogram <- function(df) {
 draw_pois_histogram(minimal_interval_data) +
   stat_function(geom="line", n=3, fun=dpois, args=list(lambda=lambda), colour = "red", size=1.5)
 ```
+
+
 
